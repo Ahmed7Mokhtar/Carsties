@@ -2,6 +2,7 @@
 using AuctionService.DTOs;
 using AuctionService.Entities;
 using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,20 +22,19 @@ public class AuctionsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<AuctionDto>>> GetAllAuctions()
+    public async Task<ActionResult<List<AuctionDto>>> GetAllAuctions(string date)
     {
-        var auctions = await _context.Auctions
-            .Include(a => a.Item)
-            .OrderBy(a => a.Item.Make)
-            .ToListAsync();
+        var query = _context.Auctions.OrderBy(m => m.Item.Make).AsQueryable();
+        if(!string.IsNullOrEmpty(date))
+            query = query.Where(m => m.UpdatedAt.CompareTo(DateTime.Parse(date).ToUniversalTime()) > 0);
 
-        return _mapper.Map<List<AuctionDto>>(auctions);
+        return await query.ProjectTo<AuctionDto>(_mapper.ConfigurationProvider).ToListAsync();
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<AuctionDto>> GetAuctionById(Guid id)
     {
-        var auction = await _context.Auctions
+        var auction = await _context.Auctions.AsNoTracking()
             .Include(a => a.Item)
             .FirstOrDefaultAsync(a => a.Id == id);
 
@@ -79,7 +79,7 @@ public class AuctionsController : ControllerBase
         var result = await _context.SaveChangesAsync() > 0;
         if(result) return Ok();
 
-        return BadRequest("Problem saving changes"); 
+        return BadRequest("Problem saving changes");
     }
 
     [HttpDelete("{id}")]
